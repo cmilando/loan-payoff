@@ -15,11 +15,11 @@
 
 library(shiny)
 library(shinybusy)
+library(shinythemes)
 library(tidyverse)
 library(nloptr)
 library("scales")
 library(ggpmisc)
-library(ggpubr)
 
 # =============================================================================
 # The loan payoff function
@@ -247,7 +247,7 @@ my_loan_payoff <- function(x,
       theme(
         axis.text = element_text(size = 15),
         axis.title = element_text(size = 20),
-        legend.text = element_text(size = 15),
+        legend.text = element_text(size = 15, face = "plain"),
         legend.position = "bottom",
         title = element_text(size = 15)
       ) + 
@@ -255,7 +255,7 @@ my_loan_payoff <- function(x,
                x = 1,
                y = highest_investment_amt,
                label = list(my_table),
-               size = 6.5,
+               size = 5,
                table.colnames = F,
                table.hjust = 1)
 
@@ -330,6 +330,9 @@ payoff_optimizer <- function(input) {
 
 ui <- fluidPage(
   
+  # theme
+  theme = shinytheme("flatly"),
+  
   # max width
   style = "max-width: 760px;",
 
@@ -363,11 +366,12 @@ ui <- fluidPage(
         "Annual Investment Growth Rate (0.15 = 15%)",
         value = 0.10, min = 0, step = 0.01
       ),
+      helpText("Converted to a monthly rate by (1 + rate)^(1/12) - 1",parse = T),
       numericInput("capital_gains_tax",
         "Capital gains tax (0.20 = 20%)",
         value = 0.20, min = 0, step = 0.01
       ),
-      helpText("This is incurred when investments are used to pay the loan"),
+      helpText("Incurred when investments are used to pay the loan"),
       numericInput("total_monthly_revenue",
         "Total monthly amount to be spent on investments or loan payoff ($)",
         value = 1200, min = 0
