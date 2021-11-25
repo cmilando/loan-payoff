@@ -358,6 +358,7 @@ ui <- fluidPage(
         "Annual Loan Interest Rate (0.0675 = 6.75%)",
         value = 0.0675, min = 0
       ),
+      helpText("Assuming a simple interest type, not compound"),
       numericInput("min_IDR",
         "Minimum monthly loan payment ($)",
         value = 300, min = 0
