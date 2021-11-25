@@ -379,11 +379,11 @@ ui <- fluidPage(
       ),
       numericInput("asset_in_investments",
         "Total initial investment ($)",
-        value = 2600, min = 0
+        value = 3000, min = 0
       ),
       numericInput("loan_to_payoff",
         "Loan payoff amount ($)",
-        value = 50200, min = 0,
+        value = 50000, min = 0,
       ),
       checkboxInput("pslf", "Apply PSLF?", FALSE),
       helpText("Assumes that loans are forgiven after 10yrs"),
