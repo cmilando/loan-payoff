@@ -39,7 +39,8 @@ my_loan_payoff <- function(x,
                            max_months,
                            pslf,
                            skim_check,
-                           make_plot) {
+                           make_plot
+                           ) {
 
   # annual interest rate
   # https://studentaid.gov/understand-aid/types/loans/interest-rates
@@ -218,6 +219,7 @@ my_loan_payoff <- function(x,
 
     amt_paid_total <- max(plot_df$amt_paid)
     highest_investment_amt <- max(plot_df$investment_amt)
+    max_any <- max(plot_df[, -1])
 
     table_labels <- c("Amt paid", "Loan remainder", "Loan paid in",
                       "Amt in investments")
@@ -226,14 +228,14 @@ my_loan_payoff <- function(x,
                        sprintf("%.1fyrs", month_paid_off / 12),
                        dollar_format(accuracy = 1)(asset_in_investments))
     my_table <- data.frame(desc = table_labels, value = table_values)
-                       
+        
     plot_df <- plot_df %>%
       pivot_longer(cols = c(loan_balance, investment_amt, amt_paid))
     
     plot_df$name <- factor(
       plot_df$name,
       levels = c("amt_paid", "investment_amt", "loan_balance"),
-      labels = c("Amt. paid", "Investment amt.", "Loan balance")
+      labels = c("Loan paid", "Investment amt.", "Remaining\nLoan balance")
     )
 
     p <- ggplot(plot_df, aes(x = month, y = value, color = name)) +
@@ -241,19 +243,20 @@ my_loan_payoff <- function(x,
       geom_point() +
       geom_line() +
       scale_color_discrete(name = NULL) +
+      scale_x_continuous(breaks = seq(from = 0, to = month_i - 1, by = 12)) +
       ylab(NULL) +
       xlab("Month") +
       scale_y_continuous(labels = scales::dollar_format()) +
       theme(
-        axis.text = element_text(size = 15),
-        axis.title = element_text(size = 20),
-        legend.text = element_text(size = 15, face = "plain"),
+        axis.text = element_text(size = 14),
+        axis.title = element_text(size = 17),
+        legend.text = element_text(size = 14, face = "plain"),
         legend.position = "bottom",
-        title = element_text(size = 15)
+        title = element_text(size = 14)
       ) + 
       annotate(geom = "table",
                x = 1,
-               y = highest_investment_amt,
+               y = max_any,
                label = list(my_table),
                size = 5,
                table.colnames = F,
@@ -318,7 +321,7 @@ payoff_optimizer <- function(input) {
 
   # if output[3] = 0, then set output[2] = 0
   # if you never skim, it doesn't matter what the threshold is
-  if (output[3] < 0.001) output[2] <- 0.
+  if (output[3] < 0.01) output[2] <- 0.
 
   return(output)
 }
@@ -501,7 +504,8 @@ server <- function(input, output, session) {
       make_plot = T
     )
   })
+  
 }
-
+  
 # =============================================================================
 shinyApp(ui = ui, server = server)
