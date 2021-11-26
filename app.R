@@ -235,8 +235,9 @@ my_loan_payoff <- function(x,
     )
 
     # make table
-    table_labels <- c("Amt paid", "Loan remainder", "Loan paid in",
-                      "Amt in investments")
+    table_labels <- c("Final amt. paid to loan", 
+                      "Loan remainder", "Loan paid in",
+                      "Final amt. in investments")
     table_values <- c( dollar_format(accuracy = 1)(amt_paid_total), 
                        dollar_format(accuracy = 1)(loan_to_payoff),
                        sprintf("%.1fyrs", month_paid_off / 12),
@@ -273,7 +274,7 @@ my_loan_payoff <- function(x,
 payoff_optimizer <- function(input) {
 
   # min payment amount so you have to meet
-  lb_x1 <- input$min_IDR / input$total_monthly_revenue
+  lb_x1 <- input$min_IDR / input$total_monthly_revenue * 100
 
   res1 <- nloptr(
     x0 = as.double(c(
@@ -283,7 +284,7 @@ payoff_optimizer <- function(input) {
     )),
     eval_f = my_loan_payoff,
     lb = c(lb_x1, 0, 0),
-    ub = c(1, input$skim_thresh_max, 1),
+    ub = c(100, input$skim_thresh_max, 100),
     opts = list(
       "algorithm" = "NLOPT_GN_ISRES",
       "maxeval" = input$max_eval,
@@ -325,12 +326,12 @@ ui <- fluidPage(
   theme = shinytheme("flatly"),
   
   # max width
-  style = "max-width: 760px;",
+  style = "max-width: 700px;",
 
   # Application title
   h2("Loan payoff decision support tool",align = 'center'),
   
-  h4("Helping you make decisions about investing versus paying off loans.", 
+  h4("Use this to help make decisions about investing versus paying off loans.",
      a("Github", href="https://github.com/cmilando/loan-payoff"),
      align = 'center'),
   
@@ -339,7 +340,7 @@ ui <- fluidPage(
     style = "position: relative;",
     plotOutput("distPlot", 
              hover = hoverOpts(id = "plot_hover", delayType = "throttle")),
-    uiOutput("hover_info")
+    htmlOutput("hover_info")
   ),
   
   
@@ -365,12 +366,12 @@ ui <- fluidPage(
         "Annual Investment Growth Rate (0.15 = 15%)",
         value = 0.10, min = 0, step = 0.01
       ),
-      helpText("Converted to a monthly rate by (1 + rate)^(1/12) - 1"),
+      helpText("Used monthly rate: (1 + annual rate)^(1/12) - 1"),
       numericInput("capital_gains_tax",
         "Capital gains tax (0.20 = 20%)",
         value = 0.20, min = 0, step = 0.01
       ),
-      helpText("Incurred when investments are used to pay the loan"),
+      helpText("Incurred when investments are used for loan payment"),
       numericInput("total_monthly_revenue",
         "Total monthly amount to be spent on investments or loan payoff ($)",
         value = 1200, min = 0
@@ -383,7 +384,7 @@ ui <- fluidPage(
         "Loan payoff amount ($)",
         value = 50000, min = 0,
       ),
-      checkboxInput("pslf", "Apply PSLF?", FALSE),
+      checkboxInput("pslf", "Apply Public Service Loan Forgiveness?", FALSE),
       helpText("Assumes that loans are forgiven after 10yrs"),
       numericInput("max_months",
         "Months to simulate", 120,
@@ -454,14 +455,15 @@ ui <- fluidPage(
 # =============================================================================
 # Define reactive server logic
 # tooltip from here: https://gitlab.com/-/snippets/16220
+# and here https://cran.r-project.org/web/packages/ggalluvial/vignettes/shiny.html
 server <- function(input, output, session) {
   
   # a list of data resulting from the present simulation
   sim_data <- reactiveValues()
-  
+
   observe({
-    
-    sim_data <<- my_loan_payoff(
+
+    zz <- my_loan_payoff(
       x = c(
         input$p_revenue_direct,
         input$investment_skim_threshold,
@@ -478,6 +480,10 @@ server <- function(input, output, session) {
       skim_check = input$skim_check,
       make_plot = T
     )
+    
+    sim_data$plot_df <<- zz$plot_df
+    sim_data$my_table <<- zz$my_table
+    sim_data$max_any <<- zz$max_any
 
   })
   
@@ -505,7 +511,7 @@ server <- function(input, output, session) {
   })
   
   # tooltip
-  output$hover_info <- renderUI({
+  output$hover_info <- renderText({
     hover <- input$plot_hover
     point <- nearPoints(sim_data[['plot_df']], 
                         hover, threshold = 5, maxpoints = 1, addDist = TRUE)
@@ -529,22 +535,25 @@ server <- function(input, output, session) {
     # z-index is set so we are sure are tooltip will be on top
     this_name_fct <- as.integer(point$name)
     col.hex <- brewer.pal(length(levels(point$name)), "Set2")[this_name_fct]
+    offset <- 5
     
-    
-    style <- paste0("position:absolute; ",
-                    "z-index:100; ",
+    style <- paste0(
                     "padding: 2px; ",
                     "color: white; ",
+                    "position: absolute; ",
+                    "top: ", hover$coords_css$y + offset, "px; ",
+                    "left: ", hover$coords_css$x + offset, "px; ",
                     "background-color: ", col.hex, "; ",
-                    "left:", left_px + 10, "px; ",
-                    "top:", top_px - 20, "px;")
+                    "padding: 3px; ",
+                    "color: white; ")
     
     # actual tooltip created as wellPanel
-    wellPanel(
-      style = style,
-      HTML(paste0("(month ", point$month,
-                    "): ", dollar_format(accuracy = 1)(point$value)))
-    )
+    renderTags(
+      tags$div(
+        paste0("(month ", point$month,
+               "): ", dollar_format(accuracy = 1)(point$value)),
+        style = style)
+    )$html
   })
   
   
@@ -567,7 +576,7 @@ server <- function(input, output, session) {
         axis.text = element_text(size = 14),
         axis.title = element_text(size = 17),
         legend.text = element_text(size = 14, face = "plain"),
-        legend.position = "bottom",
+        legend.position = "top",
         title = element_text(size = 14)
       ) +
       annotate(geom = "table",
