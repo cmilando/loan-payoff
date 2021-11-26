@@ -580,14 +580,29 @@ server <- function(input, output, session) {
     # create style property fot tooltip
     # background color is set so tooltip is a bit transparent
     # z-index is set so we are sure are tooltip will be on top
-    style <- paste0("position:absolute; z-index:100; background-color: rgba(245, 245, 245, 0.85); ",
-                    "left:", left_px + 2, "px; top:", top_px + 2, "px;")
+    point$name <- factor(
+      point$name,
+      levels = c("amt_paid", "investment_amt", "loan_balance"),
+      labels = c("Amt. paid to loan", "Investment amt.", "Loan balance")
+    )
+    
+    this_name_fct <- as.integer(point$name)
+    col.hex <- brewer.pal(length(levels(point$name)), "Set2")[this_name_fct]
+    
+    style <- paste0("position:absolute; ",
+                    'padding: 3px; ',
+                    "color: white; ",
+                "z-index:100; ",
+                "background-color: ", col.hex, "; ",
+                "left:", left_px + 2, "px; ",
+                "top:", top_px + 2, "px;")
     
     # actual tooltip created as wellPanel
     wellPanel(
       style = style,
-      p(HTML(paste0("<b> Distance from left: </b>", left_px, 
-                    "<b>, from top: </b>", top_px)))
+      p(HTML(paste0("<strong> Month: </strong>", point$month, "<br>",
+                    "<strong> Value: </strong>", 
+                    dollar_format(accuracy = 1)(point$value))))
     )
     
 
