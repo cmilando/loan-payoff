@@ -594,15 +594,15 @@ server <- function(input, output, session) {
                     "color: white; ",
                 "z-index:100; ",
                 "background-color: ", col.hex, "; ",
-                "left:", left_px + 2, "px; ",
-                "top:", top_px + 2, "px;")
+                "left:", 5, "px; ",
+                "top:", 5, "px;")
     
     # actual tooltip created as wellPanel
     wellPanel(
       style = style,
-      p(HTML(paste0("<strong> Month: </strong>", point$month, "<br>",
+      HTML(paste0("<strong> Month: </strong>", point$month, "<br>",
                     "<strong> Value: </strong>", 
-                    dollar_format(accuracy = 1)(point$value))))
+                    dollar_format(accuracy = 1)(point$value)))
     )
     
 
