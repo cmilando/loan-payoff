@@ -20,6 +20,7 @@ library(tidyverse)
 library(nloptr)
 library("scales")
 library(ggpmisc)
+library(htmltools)
 
 # =============================================================================
 # The loan payoff function
@@ -54,14 +55,14 @@ my_loan_payoff <- function(x,
   monthly_growth_rate <- (1 + annual_growth_rate) ^ (1/12) - 1
 
   # calculate additional revenue payouts
-  monthly_revenue_to_loan <- x[1] * total_monthly_revenue
+  monthly_revenue_to_loan <- (x[1] / 100.) * total_monthly_revenue
   monthly_revenue_to_investment <- total_monthly_revenue - monthly_revenue_to_loan
 
   # investment skim,
   # basically saying, if investment amt is > threshold, then skim off some
   # this is subject to capital gains tax, assessed later
   investment_skim_threshold <- x[2]
-  investment_skim_p <- x[3]
+  investment_skim_p <- x[3] / 100.
 
   # output datasets
   if (make_plot) {
@@ -210,6 +211,7 @@ my_loan_payoff <- function(x,
 
   # Make the plot
   if (make_plot) {
+    
     plot_df <- data.frame(
       month = 0:(month_i - 1),
       loan_balance = c(initial_loan_amt, do.call(rbind, loan_df)),
@@ -235,8 +237,10 @@ my_loan_payoff <- function(x,
     plot_df$name <- factor(
       plot_df$name,
       levels = c("amt_paid", "investment_amt", "loan_balance"),
-      labels = c("Loan paid", "Investment amt.", "Remaining\nLoan balance")
+      labels = c("Amt. paid to loan", "Investment amt.", "Loan balance")
     )
+    
+    print(tail(plot_df))
 
     p <- ggplot(plot_df, aes(x = month, y = value, color = name)) +
       theme_grey() + 
@@ -347,7 +351,13 @@ ui <- fluidPage(
      align = 'center'),
   
   # plot
-  plotOutput("distPlot"),
+  tags$div(
+    style = "position: relative;",
+    plotOutput("distPlot", 
+             hover = hoverOpts(id = "plot_hover", delayType = "throttle")),
+    htmlOutput("plot_hoverinfo")
+  ),
+  
   
   hr(),
 
@@ -409,7 +419,7 @@ ui <- fluidPage(
       hr(),
       sliderInput("p_revenue_direct",
                   "% of monthly payoff budget going directly to loans:",
-                  min = 0.0, max = 1., value = 0.5
+                  min = 0.0, max = 100, value = 50, post = " %"
       ),
       helpText(paste(
         "0% means its going all towards investments,",
@@ -417,7 +427,7 @@ ui <- fluidPage(
         "going all towards loans directly"
       )),
       hr(),
-      checkboxInput("skim_check", "Check for skim threshold?", FALSE),
+      checkboxInput("skim_check", "Check for investment skim threshold?", FALSE),
       helpText(paste(
         "If my investment amt is greater than this,",
         "then skim some off and use it to pay loans"
@@ -436,9 +446,8 @@ ui <- fluidPage(
                      min = 0
         ),
         sliderInput("investment_skim_p",
-                    "investment skim percentage", 0.5,
-                    min = 0.0,
-                    max = 1.
+                    "investment skim percentage", 
+                    min = 0.0, max = 100, value = 50, post = " %"
         ),
         helpText("what % of my total investment amt should I skim off?"),
       ),
@@ -458,6 +467,7 @@ ui <- fluidPage(
 
 # =============================================================================
 # Define reactive server logic
+# tooltip from here: https://cran.r-project.org/web/packages/ggalluvial/vignettes/shiny.html
 server <- function(input, output, session) {
   
   # what happens when the optimize button is clicked
@@ -481,6 +491,31 @@ server <- function(input, output, session) {
     updateSliderInput(session, "p_revenue_direct", value = 0.5)
     updateNumericInput(session, "investment_skim_threshold", value = 3000)
     updateSliderInput(session, "investment_skim_p", value = 0.5)
+  })
+  
+  # tooltip
+  output$plot_hoverinfo <- renderPrint({
+
+    if(!is.null(input$plot_hover)) {
+      hover <- input$plot_hover
+      offset <- 10
+      renderTags(
+        tags$div(
+          paste0("(month ", round(hover$x, 0),
+                 "): ", dollar_format(accuracy = 1)(max(0, hover$y))),
+          style = paste0(
+            "position: absolute; ",
+            "top: ", hover$coords_css$y - 3 * offset, "px; ",
+            "left: ", hover$coords_css$x + offset, "px; ",
+            "background: gray; ",
+            "padding: 3px; ",
+            "color: white; "
+          )
+        )
+      )$html
+      
+    }
+    
   })
   
   # draws the plot
