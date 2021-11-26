@@ -14,7 +14,7 @@
 #'  ===========================================================================
 
 library(shiny)
-library(shinybusy)
+library(waiter)
 library(shinythemes)
 library(tidyverse)
 library(nloptr)
@@ -41,8 +41,7 @@ my_loan_payoff <- function(x,
                            max_months,
                            pslf,
                            skim_check,
-                           make_plot
-                           ) {
+                           make_plot) {
 
   # annual interest rate
   # https://studentaid.gov/understand-aid/types/loans/interest-rates
@@ -53,7 +52,7 @@ my_loan_payoff <- function(x,
   # updated to include correct ROI formula for ytd growth
   # thanks to Tiff B
   # https://www.calculator.net/investment-calculator.html
-  monthly_growth_rate <- (1 + annual_growth_rate) ^ (1/12) - 1
+  monthly_growth_rate <- (1 + annual_growth_rate)^(1 / 12) - 1
 
   # calculate additional revenue payouts
   monthly_revenue_to_loan <- (x[1] / 100.) * total_monthly_revenue
@@ -115,54 +114,54 @@ my_loan_payoff <- function(x,
     # -- STEP 3 --
     # if there are loans remaining?
     # check the skim check
-    if(skim_check) {
+    if (skim_check) {
       if (loan_to_payoff > 0) {
-  
+
         # is the investment amt above the threshold?
         if (asset_in_investments > investment_skim_threshold) {
-  
+
           # what is the max that you could do from skim
           amount_from_skim <- investment_skim_p *
             asset_in_investments * (1 - capital_gains_tax)
-  
+
           # if the max is less than remaining loan balance
           if (amount_from_skim < loan_to_payoff) {
-  
+
             # adjust the amt you paid
             if (make_plot) {
               amt_paid_df[[month_i]] <-
                 amt_paid_df[[month_i]] + asset_in_investments * investment_skim_p
             }
-  
+
             # reduce loan by that much
             loan_to_payoff <- loan_to_payoff - amount_from_skim
-  
+
             # reduce investments by the full amount
             asset_in_investments <- asset_in_investments * (1 - investment_skim_p)
           } else {
-  
+
             # this means that you just have to take less
             lower_skim_p <- loan_to_payoff / (
               asset_in_investments * (1 - capital_gains_tax))
-  
+
             stopifnot(lower_skim_p < investment_skim_p)
-  
+
             # adjust the amt you paid
             if (make_plot) {
               amt_paid_df[[month_i]] <-
                 amt_paid_df[[month_i]] + asset_in_investments * lower_skim_p
             }
-  
+
             # pay off loan in full
             loan_to_payoff <- 0
-  
+
             # reduce asset in investment by lower skim amt
             asset_in_investments <- asset_in_investments * (1 - lower_skim_p)
           }
         }
       }
     }
-    
+
     # -- STEP 5 --
     # add investment amt and surplus to investments
     asset_in_investments <- asset_in_investments +
@@ -219,39 +218,9 @@ my_loan_payoff <- function(x,
       investment_amt = c(initial_investment_amt, do.call(rbind, investments_df)),
       amt_paid = cumsum(c(0, do.call(rbind, amt_paid_df)))
     )
+    
+    return(plot_df)
 
-    amt_paid_total <- max(plot_df$amt_paid)
-    highest_investment_amt <- max(plot_df$investment_amt)
-    max_any <- max(plot_df[, -1])
-    
-    # reshape
-    plot_df <- plot_df %>%
-      pivot_longer(cols = c(loan_balance, investment_amt, amt_paid))
-    
-    plot_df$name <- factor(
-      plot_df$name,
-      levels = c("amt_paid", "investment_amt", "loan_balance"),
-      labels = c("Amt. paid to loan", "Investment amt.", "Loan balance")
-    )
-
-    # make table
-    table_labels <- c("Final amt. paid to loan", 
-                      "Loan remainder", "Loan paid in",
-                      "Final amt. in investments")
-    table_values <- c( dollar_format(accuracy = 1)(amt_paid_total), 
-                       dollar_format(accuracy = 1)(loan_to_payoff),
-                       sprintf("%.1fyrs", month_paid_off / 12),
-                       dollar_format(accuracy = 1)(asset_in_investments))
-    my_table <- data.frame(desc = table_labels, value = table_values)
-    
-    return(list(
-      'plot_df' =  plot_df,
-      'amt_paid_total' = amt_paid_total,
-      'highest_investment_amt' = highest_investment_amt,
-      'max_any' = max_any,
-      'my_table' = my_table
-    ))
-    
   }
 
   # this is what you are minimizing
@@ -321,37 +290,40 @@ payoff_optimizer <- function(input) {
 # https://shiny.rstudio.com/articles/dynamic-ui.html
 
 ui <- fluidPage(
-  
+
   # theme
   theme = shinytheme("flatly"),
-  
+
   # max width
   style = "max-width: 700px;",
 
   # Application title
-  h2("Loan payoff decision support tool",align = 'center'),
-  
+  h2("Loan payoff decision support tool", align = "center"),
   h4("Use this to help make decisions about investing versus paying off loans.",
-     a("Github", href="https://github.com/cmilando/loan-payoff"),
-     align = 'center'),
-  
+    a("Github", href = "https://github.com/cmilando/loan-payoff"),
+    align = "center"
+  ),
+
   # plot
   tags$div(
     style = "position: relative;",
-    plotOutput("distPlot", 
-             hover = hoverOpts(id = "plot_hover", delayType = "throttle")),
-    htmlOutput("hover_info")
+    plotOutput("distPlot",
+      hover = hoverOpts(id = "plot_hover", delayType = "throttle")
+    ),
+    uiOutput("hover_info", style = "pointer-events: none")
   ),
   
-  
-  hr(),
+  # waiter
+  use_waiter(),
 
+  hr(),
   fluidRow(
     # Non optimized inputs
     column(
       width = 6,
-      tags$label("Non-optimized inputs", 
-                 style = "color:blue; vertical-align: top"),
+      tags$label("Non-optimized inputs",
+        style = "color:blue; vertical-align: top"
+      ),
       helpText("Inputs below do not vary when you click 'Maximize'"),
       numericInput("annual_interest_rate",
         "Annual Loan Interest Rate (0.0675 = 6.75%)",
@@ -396,17 +368,18 @@ ui <- fluidPage(
     # Optimized inputs
     column(
       width = 6,
-      tags$label("Optimized inputs", 
-                 style = "color:blue; vertical-align: top"),br(),
+      tags$label("Optimized inputs",
+        style = "color:blue; vertical-align: top"
+      ), br(),
       helpText("Inputs below are optimized when you click 'Maximze'"),
       actionButton("optimize", "Maximize net worth!",
-                   style = "color: #fff; background-color: #337ab7; border-color: #2e6da4"
+        style = "color: #fff; background-color: #337ab7; border-color: #2e6da4"
       ),
       actionButton("reset", "Reset values"),
       hr(),
       sliderInput("p_revenue_direct",
-                  "% of monthly payoff budget going directly to loans:",
-                  min = 0.0, max = 100, value = 50, post = " %"
+        "% of monthly payoff budget going directly to loans:",
+        min = 0.0, max = 100, value = 50, post = " %"
       ),
       helpText(paste(
         "0% means its going all towards investments,",
@@ -422,19 +395,19 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "input.skim_check == true",
         numericInput("investment_skim_threshold",
-                     "investment skim threshold ($)", 3000,
-                     min = 0
+          "investment skim threshold ($)", 3000,
+          min = 0
         ),
         helpText(paste(
           "If my investment amt is greater than this..."
         )),
         numericInput("skim_thresh_max",
-                     "Max skim threshold to check? ($)", 5e4,
-                     min = 0
+          "Max skim threshold to check? ($)", 5e4,
+          min = 0
         ),
         sliderInput("investment_skim_p",
-                    "investment skim percentage", 
-                    min = 0.0, max = 100, value = 50, post = " %"
+          "investment skim percentage",
+          min = 0.0, max = 100, value = 50, post = " %"
         ),
         helpText("what % of my total investment amt should I skim off?"),
       ),
@@ -446,8 +419,10 @@ ui <- fluidPage(
       helpText("the cutoff for how much net worth changes before stopping"),
       hr(),
       helpText("penalty placeholder"),
-      helpText(paste("an additional function that penalizes not paying off",
-                     "loan quickly, call it quantized anxiety, not implemented yet")),
+      helpText(paste(
+        "an additional function that penalizes not paying off",
+        "loan quickly, call it quantized anxiety, not implemented yet"
+      )),
     )
   )
 )
@@ -456,14 +431,17 @@ ui <- fluidPage(
 # Define reactive server logic
 # tooltip from here: https://gitlab.com/-/snippets/16220
 # and here https://cran.r-project.org/web/packages/ggalluvial/vignettes/shiny.html
+# and here https://shiny.rstudio.com/reference/shiny/1.2.0/plotOutput.html
+# and finally this
+# https://stackoverflow.com/questions/26004302/how-to-display-a-busy-indicator-in-a-shiny-app
+# because shinybusy messes with the css which makes the tooltip busted
 server <- function(input, output, session) {
   
+  w <- Waiter$new(id = "optimize")
+  
   # a list of data resulting from the present simulation
-  sim_data <- reactiveValues()
-
-  observe({
-
-    zz <- my_loan_payoff(
+  data <- reactive({
+    my_loan_payoff(
       x = c(
         input$p_revenue_direct,
         input$investment_skim_threshold,
@@ -480,95 +458,78 @@ server <- function(input, output, session) {
       skim_check = input$skim_check,
       make_plot = T
     )
-    
-    sim_data$plot_df <<- zz$plot_df
-    sim_data$my_table <<- zz$my_table
-    sim_data$max_any <<- zz$max_any
-
   })
-  
+
   # what happens when the optimize button is clicked
   observeEvent(input$optimize, {
-    show_modal_spinner(
-      text = "Running optimizer",
-      spin = "fading-circle"
-    )
+    w$show()
+    zz <- payoff_optimizer(input)
     
-    output <- payoff_optimizer(input)
-    
-    remove_modal_spinner()
-    
-    updateNumericInput(session, "p_revenue_direct", value = output[1])
-    updateNumericInput(session, "investment_skim_threshold", value = output[2])
-    updateNumericInput(session, "investment_skim_p", value = output[3])
+    updateNumericInput(session, "p_revenue_direct", value = zz[1])
+    updateNumericInput(session, "investment_skim_threshold", value = zz[2])
+    updateNumericInput(session, "investment_skim_p", value = zz[3])
+    w$hide()
   })
-  
+
   # what happens when the reset button is clicked
   observeEvent(input$reset, {
-    updateSliderInput(session, "p_revenue_direct", value = 0.5)
+    updateSliderInput(session, "p_revenue_direct", value = 50)
     updateNumericInput(session, "investment_skim_threshold", value = 3000)
-    updateSliderInput(session, "investment_skim_p", value = 0.5)
+    updateSliderInput(session, "investment_skim_p", value = 50)
   })
-  
-  # tooltip
-  output$hover_info <- renderText({
-    hover <- input$plot_hover
-    point <- nearPoints(sim_data[['plot_df']], 
-                        hover, threshold = 5, maxpoints = 1, addDist = TRUE)
-    if (nrow(point) == 0) return(NULL)
-    
-    # calculate point position INSIDE the image as percent of total dimensions
-    # from left (horizontal) and from top (vertical)
-    left_pct <- (hover$x - hover$domain$left) / 
-      (hover$domain$right - hover$domain$left)
-    top_pct <- (hover$domain$top - hover$y) / 
-      (hover$domain$top - hover$domain$bottom)
-    
-    # calculate distance from left and bottom side of the picture in pixels
-    left_px <- hover$range$left + 
-      left_pct * (hover$range$right - hover$range$left)
-    top_px <- hover$range$top + 
-      top_pct * (hover$range$bottom - hover$range$top)
-    
-    # create style property fot tooltip
-    # background color is set so tooltip is a bit transparent
-    # z-index is set so we are sure are tooltip will be on top
-    this_name_fct <- as.integer(point$name)
-    col.hex <- brewer.pal(length(levels(point$name)), "Set2")[this_name_fct]
-    offset <- 5
-    
-    style <- paste0(
-                    "padding: 2px; ",
-                    "color: white; ",
-                    "position: absolute; ",
-                    "top: ", hover$coords_css$y + offset, "px; ",
-                    "left: ", hover$coords_css$x + offset, "px; ",
-                    "background-color: ", col.hex, "; ",
-                    "padding: 3px; ",
-                    "color: white; ")
-    
-    # actual tooltip created as wellPanel
-    renderTags(
-      tags$div(
-        paste0("(month ", point$month,
-               "): ", dollar_format(accuracy = 1)(point$value)),
-        style = style)
-    )$html
-  })
-  
   
   # draws the plot
   # because reactive, it updates each time
   output$distPlot <- renderPlot({
     
-    ggplot(sim_data[['plot_df']], aes(x = month, y = value, color = name)) +
+    # reactive
+    plot_df <- data()
+    
+    amt_paid_total <- max(plot_df$amt_paid)
+    highest_investment_amt <- max(plot_df$investment_amt)
+    max_any <- max(plot_df[, -1])
+    month_paid_off <- plot_df$month[
+      min(which(plot_df$loan_balance == 0, arr.ind = T))]
+    asset_in_investments <- plot_df$investment_amt[nrow(plot_df)]
+    loan_to_payoff <- plot_df$loan_balance[nrow(plot_df)]
+    max_month <- plot_df$month[nrow(plot_df)]
+
+    # reshape
+    plot_df <- plot_df %>%
+      pivot_longer(cols = c(loan_balance, investment_amt, amt_paid))
+    
+    plot_df$name <- factor(
+      plot_df$name,
+      levels = c("amt_paid", "investment_amt", "loan_balance"),
+      labels = c("Amt. paid to loan", "Investment amt.", "Loan balance")
+    )
+    
+    # make table
+    table_labels <- c(
+      "Final amt. paid to loan",
+      "Loan remainder", "Loan paid in",
+      "Final amt. in investments"
+    )
+    table_values <- c(
+      dollar_format(accuracy = 1)(amt_paid_total),
+      dollar_format(accuracy = 1)(loan_to_payoff),
+      sprintf("%.1fyrs", month_paid_off / 12),
+      dollar_format(accuracy = 1)(asset_in_investments)
+    )
+
+    my_table <- data.frame(desc = table_labels, value = table_values)
+    
+    # return plot
+    ggplot(plot_df, aes(x = month, y = value, color = name)) +
       theme_grey() +
       geom_point() +
       geom_line() +
-      scale_color_brewer(name = NULL,palette = "Set2") +
-      scale_x_continuous(breaks = seq(from = 0,
-                                      to = max(sim_data[['plot_df']]$month), 
-                                      by = 12)) +
+      scale_color_brewer(name = NULL, palette = "Set2") +
+      scale_x_continuous(breaks = seq(
+        from = 0,
+        to = max_month,
+        by = 12
+      )) +
       ylab(NULL) +
       xlab("Month") +
       scale_y_continuous(labels = scales::dollar_format()) +
@@ -579,17 +540,59 @@ server <- function(input, output, session) {
         legend.position = "top",
         title = element_text(size = 14)
       ) +
-      annotate(geom = "table",
-               x = 1,
-               y = sim_data[['max_any']],
-               label = list(sim_data[['my_table']]),
-               size = 5,
-               table.colnames = F,
-               table.hjust = 1)
-    
+      annotate(
+        geom = "table",
+        x = 1,
+        y = max_any,
+        label = list(my_table),
+        size = 5,
+        table.colnames = F,
+        table.hjust = 1
+      )
   })
   
+  # tooltip
+  output$hover_info <- renderUI({
+    # reactive
+    plot_df <- data()
+
+    plot_df <- plot_df %>%
+      pivot_longer(cols = c(loan_balance, investment_amt, amt_paid))
+    
+    hover <- input$plot_hover
+    
+    point <- nearPoints(plot_df, hover,
+                        threshold = 5, maxpoints = 1, addDist = TRUE
+    )
+    if (nrow(point) == 0) {
+      return(NULL)
+    }
+
+    # calculate point position INSIDE the image as percent of total dimensions
+    # from left (horizontal) and from top (vertical)
+    left_pct <- (hover$x - hover$domain$left) / (hover$domain$right - hover$domain$left)
+    top_pct <- (hover$domain$top - hover$y) / (hover$domain$top - hover$domain$bottom)
+    
+    # calculate distance from left and bottom side of the picture in pixels
+    left_px <- hover$range$left + left_pct * (hover$range$right - hover$range$left)
+    top_px <- hover$range$top + top_pct * (hover$range$bottom - hover$range$top)
+    
+    # create style property fot tooltip
+    # background color is set so tooltip is a bit transparent
+    # z-index is set so we are sure are tooltip will be on top
+    style <- paste0("position:absolute; z-index:100; background-color: rgba(245, 245, 245, 0.85); ",
+                    "left:", left_px + 2, "px; top:", top_px + 2, "px;")
+    
+    # actual tooltip created as wellPanel
+    wellPanel(
+      style = style,
+      p(HTML(paste0("<b> Distance from left: </b>", left_px, 
+                    "<b>, from top: </b>", top_px)))
+    )
+    
+
+  })
 }
-  
+
 # =============================================================================
 shinyApp(ui = ui, server = server)
