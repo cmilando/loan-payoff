@@ -317,6 +317,7 @@ ui <- fluidPage(
   use_waiter(),
 
   hr(),
+  
   fluidRow(
     # Non optimized inputs
     column(
@@ -424,6 +425,12 @@ ui <- fluidPage(
         "loan quickly, call it quantized anxiety, not implemented yet"
       )),
     )
+  ),
+  
+  #copyright
+  hr(),
+  tags$p(
+    HTML("&copy; 2021 Chad W. Milando")  
   )
 )
 
